@@ -1,0 +1,35 @@
+div.without-chords {
+    line-height: 1;
+	text-indent: -2em;
+	padding-left: 2em;
+}
+div.with-chords {
+    line-height: 1;
+	text-indent: -2em;
+	padding-left: 2em;
+}
+div.chorus {
+    margin-top : 0.5em;
+    font-style: italic;
+    font-weight: normal;
+}
+div.verse {
+    margin-top : 0.5em;
+    font-weight: normal;
+    font-style: normal;
+}
+div.bridge {
+    margin-top : 0.5em;
+    font-style: italic;
+    font-weight: normal;
+}
+span.chord {
+    display: none;
+    width: 0;
+}
+span.whitespace{
+    margin: 0.2em;
+}
+span.double-whitespace{
+    margin: 0.2em;
+}
