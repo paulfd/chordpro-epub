@@ -35,4 +35,5 @@ Example usage
 ```bash
 $ python3 chopro-epub.py --css songbook.css --output songbook.epub list.txt
 $ python3 chopro-epub.py --wrap-chords --css sony.css --output songbook-sony.epub list.txt
+
 ```
