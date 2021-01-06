@@ -34,5 +34,5 @@
     font-style: italic;
     font-weight: normal;
 }
-.chordtextline, .textline, .text, .verse{}
 .title, .artist{display: none;}
+.songline, .text, .verse{}

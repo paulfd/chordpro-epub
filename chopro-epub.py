@@ -20,12 +20,6 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-#
-# 06dec20 rhh: changed HTML formatting to "one table per songline". This avoids the browser
-#              specific handling of "overflow div-boxes". -> tables not handled correctly by some ebook-readers
-# 10dec20 rhh: changed back to divs, 
-#              one div-container for a "chordbox": inside distinct boxes for text and chord
-# 29dec20 rhh: completet rewrite based upon "pyparsing", renamed -> cp2ep
 
 from enum import Enum
 import argparse
@@ -51,8 +45,6 @@ args = parser.parse_args()
 song_skeleton = """<h3>{0} ({1})</h3>{2}"""
 default_css = """ """
 
-# pyparsing parse-action handler
-
 def chordpro2html(song):
 	title = "Unknown Title"
 	artist = "Unknown Artist"
@@ -62,31 +54,27 @@ def chordpro2html(song):
 	songState = SongState.NONE
 	textBuf = ''
 
+	# pyparsing parse-action handler
+
 	def handleEmptyLine(t): 	# switch-bak songState 
 		nonlocal songState
-		#logging.info(t.dump())
-
 		if songState == SongState.VERSE: # reset from default state
 			songState = SongState.NONE
 			return "</div>\n<br>"
 		else:
 			return "<br>"	
 
-	def handleChordTextLine(t):	# postponed handling of total line 
-
+	def handleSongLine(t):	# postponed handling of total line 
 		nonlocal textBuf, songState
 		lineHasText = len(textBuf.strip()) > 0  
 		textBuf = ''							# not needed any longer
 		line = ''								# prepare output-line
 
-		#logging.info(lineHasText)
-		#logging.info(t.dump())
-
 		if songState == SongState.NONE:			# default state!
 			songState = SongState.VERSE
 			line += '<div class="verse">'
 
-		line += '<div class="chordtextline">'
+		line += '<div class="songline">'
 		for item in t:
 			line += '<div class="chordbox">'
 
@@ -118,16 +106,12 @@ def chordpro2html(song):
 
 
 			line += '</div>'  # ...chordbox
-		line += '</div>'	# ...chordtextline
+		line += '</div>'	# ...songLine
 		return line			 
 
 	def handleText(t):			# store text in shadow buffer for later analysis
 		nonlocal textBuf
 		textBuf += t[0]
-
-		#logging.info(textBuf)
-		#logging.info(t.dump())
-		
 		return t
 
 	def handleEnvDirective(t): 	# switch songState
@@ -219,30 +203,19 @@ def chordpro2html(song):
 	text = pp.Word(lyricCharSet, excludeChars="[]{}")
 	text.setParseAction( handleText )
 
-	#textLine = pp.LineStart() + text + pp.Suppress(pp.LineEnd())
-	#textLine.setParseAction( lambda t: '<div class="textline">'+t[0].replace(' ', '&nbsp;') +'</div>')
-
 	chordbox = pp.Group( \
 		(chord("chord") + whiteSpaces("text")) | 		# whiteSpaces after chord seperates the chord from further text \
 		(chord("chord") + text("text")) |  				# standard chordbox with chord AND text \
 		chord("chord") |  								# single chord w/o text \
 		text("text"))									# single text w/o chord
 
-	chordTextLine = lineStart + pp.OneOrMore(chordbox) + lineEnd
-	chordTextLine.setParseAction( handleChordTextLine )
+	songLine = lineStart + pp.OneOrMore(chordbox) + lineEnd
+	songLine.setParseAction( handleSongLine )
 
-
-	markup = emptyLine | chordTextLine | directives # >emptyLine< MUST be bofore >chordTextLine< to catch emptyLine-action
-	#markup = chordTextLine 
-
-
-
-
-
+	markup = emptyLine | songLine | directives # >emptyLine< MUST be bofore >songLine< to catch emptyLine-action
 
 
 	for result in markup.searchString(song):
-		#print(result.dump())
 		output += result[0] + '\n'
 
 	#logging.info(output)
@@ -274,8 +247,6 @@ for f in file_list:
     if not os.path.exists(file_name):
         print(f"Could not open {file_name}, skipping")
         continue
-
-    #with open(file_name) as file:
     with codecs.open(file_name, "r", "utf-8") as file:
         body, title, artist = chordpro2html(file.read()) 
     song_title = f'{title} ({artist})'
