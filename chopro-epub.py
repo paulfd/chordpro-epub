@@ -1,4 +1,5 @@
 #!python3
+# -*- encoding: utf-8 -*-
 
 # Copyright(c) 2019 Paul Ferrand
 
@@ -19,215 +20,235 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+#
+# 06dec20 rhh: changed HTML formatting to "one table per songline". This avoids the browser
+#              specific handling of "overflow div-boxes". -> tables not handled correctly by some ebook-readers
+# 10dec20 rhh: changed back to divs, 
+#              one div-container for a "chordbox": inside distinct boxes for text and chord
+# 29dec20 rhh: completet rewrite based upon "pyparsing", renamed -> cp2ep
 
-import re
 from enum import Enum
 import argparse
 from ebooklib import epub
 import os
 
-parser = argparse.ArgumentParser(
-    description="Converts a batch of chordpro files into an epub")
-parser.add_argument(
-    'list', type=str, help="A list of chordpro files, one by line, to gather")
-parser.add_argument('--wrap-chords', action='store_true',
-                    help='Wrap chords in square brackets')
+import logging
+import codecs
+import pyparsing as pp
+
+logging.basicConfig( level=logging.INFO, filename='info.log')
+
+parser = argparse.ArgumentParser(description="Converts a batch of chordpro files into an epub")
+parser.add_argument('list', type=str, help="A list of chordpro files, one by line, to gather")
+parser.add_argument('--wrap-chords', action='store_true',help='Wrap chords in square brackets')
 parser.add_argument('--css', type=str, help='CSS file to embed')
-parser.add_argument('--output', type=str,
-                    help='Output file name', default='songbook.epub')
-parser.add_argument('--book-title', type=str,
-                    help='Book title', default='Songbook')
-parser.add_argument('--book-id', type=str, help='Book identifier',
-                    default='songbook31415926535')
+parser.add_argument('--output', type=str, help='Output file name', default='songbook.epub')
+parser.add_argument('--book-title', type=str, help='Book title', default='Songbook')
+parser.add_argument('--book-id', type=str, help='Book identifier', default='songbook31415926535')
 parser.add_argument('--book-author', type=str, help='Songbook author')
 args = parser.parse_args()
 
-song_skeleton = """
-<h3>{0} ({1})</h3>
-{2}"""
+song_skeleton = """<h3>{0} ({1})</h3>{2}"""
+default_css = """ """
 
-default_css = """
-div.without-chords {
-    line-height: 1;
-	text-indent: -2em;
-	padding-left: 2em;
-}
-div.with-chords {
-    line-height: 1.7;
-	text-indent: -2em;
-	padding-left: 2em;
-}
-div.chorus {
-    margin-top : 0.5em;
-    font-style: italic;
-    font-weight: normal;
-}
-div.verse {
-    margin-top : 0.5em;
-    font-weight: normal;
-    font-style: normal;
-}
-div.bridge {
-    margin-top : 0.5em;
-    font-style: italic;
-    font-weight: normal;
-}
-span.chord {
-	display: inline-block;
-	position: relative;
-	font-weight: bold;
-	font-size: 0.7em;
-    bottom: 1.2em;
-    left: 0.2em;
-    width: 0;
-	text-indent: 0;
-	padding-left: 0;
-}
-span.whitespace{
-    margin: 0.5em;
-}
-span.double-whitespace{
-    margin: 1em;
-}
-"""
+# pyparsing parse-action handler
 
-comments_re = re.compile(r"(.*?)\#.*")
-title_re = re.compile(r"{title:\s*(.*?)}")
-artist_re = re.compile(r"{artist:\s*(.*?)}")
-comment_re = re.compile(r"{comment:\s*(.*?)}")
+def chordpro2html(song):
+	title = "Unknown Title"
+	artist = "Unknown Artist"
+	output = ''
 
-Status = Enum('Status', 'NONE VERSE CHORUS BRIDGE')
+	SongState = Enum('SongState', 'NONE VERSE CHORUS TAB BRIDGE')
+	songState = SongState.NONE
+	textBuf = ''
 
-def clean_lines(lines):
-    """ Strip lines, remove comments and put directives on their own line always."""
-    cleaned_lines = []
-    for line in lines:
-            line = line.strip()
-            start_idx = 0
-            char_idx = 0
-            in_chord = False
-            while char_idx < len(line):
-                if line[char_idx] == "[":
-                    in_chord = True
-                if line[char_idx] == "]":
-                    in_chord = False
-                if line[char_idx] == "#" and in_chord == False:
-                    break
-                
-                if line[char_idx] == "{":
-                    start_idx = char_idx
-                    if char_idx != start_idx:
-                        cleaned_lines.append(line[start_idx:char_idx].strip())
-                if line[char_idx] == "}":
-                    cleaned_lines.append(line[start_idx:char_idx + 1].strip())
-                    start_idx = char_idx + 1
-                char_idx += 1
-            if start_idx != char_idx:
-                cleaned_lines.append(line[start_idx:char_idx].strip())
-            if len(line) == 0:
-                cleaned_lines.append("")
-    return cleaned_lines
+	def handleEmptyLine(t): 	# switch-bak songState 
+		nonlocal songState
+		#logging.info(t.dump())
 
-def chopro_to_html(lines):
-    """ Parse a chordpro file as a curated list of strings.
-        In particular, we assume here that directives are on their 
-            own line and do not span multiple lines.
-        Empty lines indicate the end of a block (verse, bridge or chorus).
-        Unknown directives are ignored.
-    """
-    cleaned_lines = clean_lines(lines)
-    status = Status.NONE
-    title = "No title found"
-    artist = "Unknown artist"
+		if songState == SongState.VERSE: # reset from default state
+			songState = SongState.NONE
+			return "</div>\n<br>"
+		else:
+			return "<br>"	
 
-    body = []
+	def handleChordTextLine(t):	# postponed handling of total line 
 
-    for line in cleaned_lines:
-        if (line == "{start_of_chorus}" or line == "{soc}") and (status == Status.NONE):
-            status = Status.CHORUS
-            body.append('<div class="chorus">')
-            continue
+		nonlocal textBuf, songState
+		lineHasText = len(textBuf.strip()) > 0  
+		textBuf = ''							# not needed any longer
+		line = ''								# prepare output-line
 
-        if (line == "{end_of_chorus}" or line == "{eoc}") and (status == Status.CHORUS):
-            status = Status.NONE
-            body.append('</div>')
-            continue
+		#logging.info(lineHasText)
+		#logging.info(t.dump())
 
-        if (line == "{start_of_bridge}" or line == "{sob}") and (status == Status.NONE):
-            status = Status.BRIDGE
-            body.append('<div class="bridge">')
-            continue
+		if songState == SongState.NONE:			# default state!
+			songState = SongState.VERSE
+			line += '<div class="verse">'
 
-        if (line == "{end_of_bridge}" or line == "{eob}") and (status == Status.BRIDGE):
-            status = Status.NONE
-            body.append('</div>')
-            continue
+		line += '<div class="chordtextline">'
+		for item in t:
+			line += '<div class="chordbox">'
 
-        title_match = title_re.match(line)
-        if title_match is not None:
-            title = title_match.group(1)
-            continue
+			# chord+text box ---------------------------------------
+			if len(item) == 2:
+				if args.wrap_chords:
+					line += '<div class="chord">' + item.chord + '</div>'
+				else:
+					line += '<div class="chord">' + item.chord[1:-1] + '</div>'
+				if lineHasText: 
+					line += '<div class="text">' + item.text.replace(' ', '&nbsp;') + '</div>'
 
-        artist_match = artist_re.match(line)
-        if artist_match is not None:
-            artist = artist_match.group(1)
-            continue
+			# single chord box ---------------------------------------
+			elif len(item) == 1 and len(item.chord)>0:	
+				if args.wrap_chords:
+					line += '<div class="chord">' + item.chord + '</div>'
+				else:
+					line += '<div class="chord">' + item.chord[1:-1] + '</div>'
+				if lineHasText:  
+					line += '<div class="text">&nbsp;</div>'
 
-        comment_match = comment_re.match(line)
-        if comment_match is not None:
-            body.append(f'<div class="comment">{comment_match.group(1)}</div>')
-            continue
+			# single text box ---------------------------------------
+			elif len(item) == 1 and len(item.text)>0:	
+				line += '<div class="text">' + item.text.replace(' ', '&nbsp;') + '</div>'
 
-        if line == '':
-            if status != Status.NONE:
-                status = Status.NONE
-                body.append('</div>')
-            continue
+			# unhandled... 
+			else:			
+				logging.info(item.dump())
 
-        # Ignore unknown directives
-        if line[0] == '{':
-            continue
 
-        if status == Status.NONE:
-            status = Status.VERSE
-            body.append('<div class="verse">')
+			line += '</div>'  # ...chordbox
+		line += '</div>'	# ...chordtextline
+		return line			 
 
-        # Split on chords
-        song_line = ''
-        split_lines = line.split("[")
-        if len(split_lines) > 1:
-            song_line += '<div class="with-chords">'
-        else:
-            song_line += '<div class="without-chords">'
+	def handleText(t):			# store text in shadow buffer for later analysis
+		nonlocal textBuf
+		textBuf += t[0]
 
-        if (split_lines[0] != ''):
-            song_line += split_lines[0]
+		#logging.info(textBuf)
+		#logging.info(t.dump())
+		
+		return t
 
-        for l in split_lines[1:]:
-            # resplit between chord and text
-            resplit = l.split("]")
-            if len(resplit) == 1:
-                chord = ''
-                text = resplit[0]
-            else:
-                chord = resplit[0]
-                text = ''.join(resplit[1:])
-            if len(text) == 0 or text[0] == ' ':
-                # Phantom space would be better but meh
-                if len(chord) == 1:
-                    text = f'<span class="whitespace"/>' + text
-                else:
-                    text = f'<span class="double-whitespace"/>' + text
-            if args.wrap_chords:
-                song_line += f'<span class="chord">[{chord}]</span>{text}'
-            else:
-                song_line += f'<span class="chord">{chord}</span>{text}'
-        song_line += '</div>'
-        body.append(song_line)
+	def handleEnvDirective(t): 	# switch songState
+		nonlocal songState
+		token = t[0].strip().lower()
+		strReturn = ''
 
-    body.append('</div>')
-    full_body = '\n'.join(body)
-    return full_body, title, artist
+		if songState != SongState.NONE: # force switching!
+			songState = SongState.NONE
+			strReturn += '</div>'
+
+		if token in ['start_of_chorus', 'soc']:
+			songState = SongState.CHORUS
+			strReturn += '<div class="chorus">'
+		elif token in ['start_of_tab', 'sot']:
+			songState = SongState.TAB
+			strReturn += '<div class="tab">'
+			
+		return strReturn	
+
+	def handleFormDirective(t):  # only comments so far....
+		token = t[0].strip().lower()
+		arg = t[1]
+		strReturn = ''
+		if token in ['comment', 'c']:
+			arg = arg.replace('\n', '<br>')
+			strReturn += '<div class="comment">' + arg + '</div>'
+		elif token in ['comment_box', 'cb']:
+			arg = arg.replace('\n', '<br>')
+			strReturn += '<div class="commentbox">' + arg + '</div>'		
+		else:	# unhandled... 
+			logging.info(t.dump())
+		return strReturn			
+
+
+	def handleMetaDirective(t):
+		nonlocal title, artist
+		token = t[0].strip().lower()
+		arg = t[1]
+		strReturn = ''
+		if token in ['title', 't']:
+			title = arg
+			strReturn += '<div class="title">' + arg + '</div>'
+		elif token in ['artist', 'a']:
+			artist = arg
+			strReturn += '<div class="artist">' + arg + '</div>'
+		else:	# unhandled... 
+			logging.info(t.dump())
+		return strReturn
+
+
+
+	# pyparsing grammar definition: directives
+
+	pp.ParserElement.setDefaultWhitespaceChars('')
+	
+	#lyricCharSet = pp.alphanums+pp.alphas8bit+",-_:;.!?#+*^°§$%&/|()='`´\\\"\t " # everything but "{}[]"
+	lyricCharSet = pp.pyparsing_unicode.Latin1.printables + "\t " 
+	chordCharSet = pp.alphanums + " -#(%)/='`´."
+
+	cmd = pp.oneOf("title t artist a")
+	arg = pp.SkipTo('}')
+	metaDirective = pp.Suppress('{') + cmd + pp.Suppress(':') + arg 
+	metaDirective.setParseAction( handleMetaDirective )
+
+	cmd = pp.oneOf("comment c comment_box cb")
+	arg = pp.SkipTo('}')
+	formDirective = pp.Suppress('{') + cmd + pp.Suppress(':') + arg
+	formDirective.setParseAction( handleFormDirective )
+	 
+	cmd = pp.oneOf("start_of_chorus soc end_of_chorus eoc start_of_tab sot end_of_tab eot")
+	envDirective = pp.Suppress('{') + cmd + pp.Suppress('}') 
+	envDirective.setParseAction( handleEnvDirective )
+
+
+	directives = metaDirective | formDirective | envDirective
+
+	# pyparsing grammar definition: chordlines
+
+	whiteSpaces = pp.Word(" \t")
+	emptyLine = pp.LineStart() + pp.Optional(whiteSpaces) + pp.LineEnd() # incl. whiteSpaces
+	emptyLine.setParseAction( handleEmptyLine )
+
+
+	lineStart = pp.LineStart() 
+	lineEnd = pp.Suppress(pp.LineEnd()) ####### needs Unix type line-endings (at the moment...)
+
+	chord = pp.Combine('[' + pp.Word(chordCharSet) + ']')	# leave sqare brackets there....
+	text = pp.Word(lyricCharSet, excludeChars="[]{}")
+	text.setParseAction( handleText )
+
+	#textLine = pp.LineStart() + text + pp.Suppress(pp.LineEnd())
+	#textLine.setParseAction( lambda t: '<div class="textline">'+t[0].replace(' ', '&nbsp;') +'</div>')
+
+	chordbox = pp.Group( \
+		(chord("chord") + whiteSpaces("text")) | 		# whiteSpaces after chord seperates the chord from further text \
+		(chord("chord") + text("text")) |  				# standard chordbox with chord AND text \
+		chord("chord") |  								# single chord w/o text \
+		text("text"))									# single text w/o chord
+
+	chordTextLine = lineStart + pp.OneOrMore(chordbox) + lineEnd
+	chordTextLine.setParseAction( handleChordTextLine )
+
+
+	markup = emptyLine | chordTextLine | directives # >emptyLine< MUST be bofore >chordTextLine< to catch emptyLine-action
+	#markup = chordTextLine 
+
+
+
+
+
+
+
+	for result in markup.searchString(song):
+		#print(result.dump())
+		output += result[0] + '\n'
+
+	#logging.info(output)
+	return output, title, artist
+
+
 
 remove_punctuation_map = dict((ord(char), None) for char in r'\/*?:"<>|')
 
@@ -238,6 +259,7 @@ book = epub.EpubBook()
 # Add metadata
 book.set_identifier(args.book_id)
 book.set_title(args.book_title)
+
 if args.book_author is not None:
     book.add_author(args.book_author)
 
@@ -253,8 +275,9 @@ for f in file_list:
         print(f"Could not open {file_name}, skipping")
         continue
 
-    with open(file_name) as file:
-        body, title, artist = chopro_to_html(file.readlines())
+    #with open(file_name) as file:
+    with codecs.open(file_name, "r", "utf-8") as file:
+        body, title, artist = chordpro2html(file.read()) 
     song_title = f'{title} ({artist})'
     song_filename = f'{title}_{artist}.xhtml'.translate(remove_punctuation_map)
     chapter = epub.EpubHtml(title=song_title, file_name=song_filename, lang='en', )
@@ -266,7 +289,7 @@ for f in file_list:
 chapter_list = list(book.get_items())
 book.toc = (tuple(chapter_list))
 
-# Add style with default is none is specified
+# Add style with default if none is specified
 if (args.css is not None) and (os.path.exists(args.css)):
     with open(args.css) as css_file:
         style_css = epub.EpubItem(

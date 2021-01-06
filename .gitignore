@@ -1,1 +1,6 @@
 *.epub
+*.log
+*.txt
+bak/
+chordJS/
+doc/

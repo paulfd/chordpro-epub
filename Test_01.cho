@@ -1,0 +1,39 @@
+{title:This is the Title}
+{artist:Artist Name}
+
+{cb:This comment is in a box...}
+
+{c:Chord lines w/o text:}
+[A] [D] [A] [D] 
+[E-] [A] [A7] [D]      
+
+{comment:Verse inkl. several     spaces,	tabs and other fancy stuff:
+- (äöüßÄÖÜ) german umlauts
+- included newlines...}
+
+Leading t[A]ext (äöüßÄÖÜ) [B]and trailing chords [X][Y][Z]
+[A][B] Leading ch[C]ords [D] and trailing text
+Single textline w/o any chords
+
+{c:Chorus:}{soc}
+Leading t[A]ext (äöüßÄÖÜ) [B]and trailing chords [X][Y][Z ringing...]
+[A][B] Leading ch[C]ords [D] and trailing text
+Single textline w/o any chords
+{eoc}
+
+{c:Tab area: (monospace, still interpreted!)}
+{sot}
+
+   Em7                 G
+e|--------------------------------------------------|
+B|-------------3---5---3----------------------------|
+G|---------2/4-------4------4p2p0-------------------|
+D|--------------------------------0-------0-0-------|
+A|------------------------------------1/2-----------|
+E|--------------------------------------------------|
+
+Leading t[A]ext (äöüßÄÖÜ) [B]and trailing chords [X][Y][Z ringing...]
+[A][B] Leading ch[C]ords [D] and trailing text
+Single textline w/o any chords
+{eot}
+{c: Tab area finished!}
