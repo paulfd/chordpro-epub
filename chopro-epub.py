@@ -34,7 +34,7 @@ logging.basicConfig( level=logging.INFO, filename='info.log')
 
 parser = argparse.ArgumentParser(description="Converts a batch of chordpro files into an epub")
 parser.add_argument('list', type=str, help="A list of chordpro files, one by line, to gather")
-parser.add_argument('--wrap-chords', action='store_true',help='Wrap chords in square brackets')
+parser.add_argument('--wrap-chords', action='store_true', help='Wrap chords in square brackets')
 parser.add_argument('--css', type=str, help='CSS file to embed')
 parser.add_argument('--output', type=str, help='Output file name', default='songbook.epub')
 parser.add_argument('--book-title', type=str, help='Book title', default='Songbook')
@@ -43,7 +43,6 @@ parser.add_argument('--book-author', type=str, help='Songbook author')
 args = parser.parse_args()
 
 song_skeleton = """<h3>{0} ({1})</h3>{2}"""
-default_css = """ """
 
 def chordpro2html(song):
 	title = "Unknown Title"
@@ -247,8 +246,10 @@ for f in file_list:
     if not os.path.exists(file_name):
         print(f"Could not open {file_name}, skipping")
         continue
+
     with codecs.open(file_name, "r", "utf-8") as file:
         body, title, artist = chordpro2html(file.read()) 
+		
     song_title = f'{title} ({artist})'
     song_filename = f'{title}_{artist}.xhtml'.translate(remove_punctuation_map)
     chapter = epub.EpubHtml(title=song_title, file_name=song_filename, lang='en', )
@@ -266,7 +267,7 @@ if (args.css is not None) and (os.path.exists(args.css)):
         style_css = epub.EpubItem(
             uid="style", file_name="style.css", media_type="text/css", content=css_file.read())
 else:
-    style_css = epub.EpubItem(uid="style", file_name="style.css", media_type="text/css", content=default_css)
+    style_css = epub.EpubItem(uid="style", file_name="style.css", media_type="text/css", content="")
 book.add_item(style_css)
 
 # add navigation files
