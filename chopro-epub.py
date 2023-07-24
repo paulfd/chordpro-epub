@@ -198,7 +198,7 @@ def chordpro2html(song):
 	lineStart = pp.LineStart() 
 	lineEnd = pp.Suppress(pp.LineEnd()) ####### needs Unix type line-endings (at the moment...)
 
-	chord = pp.Combine('[' + pp.Word(chordCharSet) + ']')	# leave sqare brackets there....
+	chord = pp.Combine('[' + pp.Word(chordCharSet) + ']')	# leave square brackets there....
 	text = pp.Word(lyricCharSet, excludeChars="[]{}")
 	text.setParseAction( handleText )
 
