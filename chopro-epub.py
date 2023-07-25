@@ -164,7 +164,7 @@ def chordpro2html(song):
     def handle_meta_directive(t):
         nonlocal title, artist
         token = t[0].strip().lower()
-        arg = t[1]
+        arg = t[1].strip()
         str_return = ""
         if token in ["title", "t"]:
             title = arg
