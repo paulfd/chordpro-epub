@@ -1,7 +1,9 @@
 *.epub
 *.log
-*.txt
 bak/
 chordJS/
 doc/
 venv
+.ruff_cache
+__pycache__
+*.egg-info

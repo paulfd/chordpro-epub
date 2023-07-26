@@ -1,7 +1,7 @@
 #!python3
 # -*- encoding: utf-8 -*-
 
-# Copyright(c) 2019 Paul Ferrand
+# Copyright(c) 2019-2023 Paul Ferrand
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files(the "Software"), to deal
@@ -21,41 +21,22 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from enum import Enum
-import argparse
-from ebooklib import epub
-import os
-
 import logging
-import codecs
+from enum import Enum
+
 import pyparsing as pp
 
-logging.basicConfig(level=logging.INFO, filename="info.log")
 
-parser = argparse.ArgumentParser(
-    description="Converts a batch of chordpro files into an epub"
-)
-parser.add_argument(
-    "list", type=str, help="a list of chordpro files, one by line, to gather"
-)
-parser.add_argument(
-    "--wrap-chords", action="store_true", help="wrap chords in square brackets"
-)
-parser.add_argument("--css", type=str, default="chopro-epub.css", help="CSS file to embed")
-parser.add_argument(
-    "--output", type=str, help="output file name", default="songbook.epub"
-)
-parser.add_argument("--book-title", type=str, help="book title", default="Songbook")
-parser.add_argument(
-    "--book-id", type=str, help="book identifier", default="songbook31415926535"
-)
-parser.add_argument("--book-author", type=str, help="songbook author")
-args = parser.parse_args()
+def chordpro2html(song: str, wrap_chords: bool = True) -> str:
+    """Converts a ChordPro file to HTML
 
-song_skeleton = """<h3>{0} ({1})</h3>{2}"""
+    Args:
+        song (str): The ChordPro file content
+        wrap_chords (bool, optional): Wrap chords. Defaults to True.
 
-
-def chordpro2html(song):
+    Returns:
+        str: the HTML formatted ChordPro file
+    """
     title = "Unknown Title"
     artist = "Unknown Artist"
     output = ""
@@ -90,20 +71,16 @@ def chordpro2html(song):
 
             # chord+text box ---------------------------------------
             if len(item) == 2:
-                if args.wrap_chords:
+                if wrap_chords:
                     line += '<div class="chord">' + item.chord + "</div>"
                 else:
                     line += '<div class="chord">' + item.chord[1:-1] + "</div>"
                 if line_has_text:
-                    line += (
-                        '<div class="text">'
-                        + item.text.replace(" ", "&nbsp;")
-                        + "</div>"
-                    )
+                    line += '<div class="text">' + item.text.replace(" ", "&nbsp;") + "</div>"
 
             # single chord box ---------------------------------------
             elif len(item) == 1 and len(item.chord) > 0:
-                if args.wrap_chords:
+                if wrap_chords:
                     line += '<div class="chord">' + item.chord + "</div>"
                 else:
                     line += '<div class="chord">' + item.chord[1:-1] + "</div>"
@@ -112,9 +89,7 @@ def chordpro2html(song):
 
             # single text box ---------------------------------------
             elif len(item) == 1 and len(item.text) > 0:
-                line += (
-                    '<div class="text">' + item.text.replace(" ", "&nbsp;") + "</div>"
-                )
+                line += '<div class="text">' + item.text.replace(" ", "&nbsp;") + "</div>"
 
             # unhandled...
             else:
@@ -149,7 +124,7 @@ def chordpro2html(song):
 
     def handle_form_directive(t):  # only comments so far....
         token = t[0].strip().lower()
-        arg = t[1]
+        arg = t[1].strip()
         str_return = ""
         if token in ["comment", "c"]:
             arg = arg.replace("\n", "<br>")
@@ -179,7 +154,8 @@ def chordpro2html(song):
     # pyparsing grammar definition: directives
     pp.ParserElement.setDefaultWhitespaceChars("")
 
-    # lyricCharSet = pp.alphanums+pp.alphas8bit+",-_:;.!?#+*^°§$%&/|()='`´\\\"\t " # everything but "{}[]"
+    # lyricCharSet = pp.alphanums+pp.alphas8bit+",-_:;.!?#+*^°§$%&/|()='`´\\\"\t "
+    # everything but "{}[]"
     lyric_char_set = pp.pyparsing_unicode.Latin1.printables + "\t "
     chord_char_set = pp.alphanums + " -#(%)/='`´."
 
@@ -193,9 +169,7 @@ def chordpro2html(song):
     form_directive = pp.Suppress("{") + cmd + pp.Suppress(":") + arg
     form_directive.setParseAction(handle_form_directive)
 
-    cmd = pp.oneOf(
-        "start_of_chorus soc end_of_chorus eoc start_of_tab sot end_of_tab eot"
-    )
+    cmd = pp.oneOf("start_of_chorus soc end_of_chorus eoc start_of_tab sot end_of_tab eot")
     env_directive = pp.Suppress("{") + cmd + pp.Suppress("}")
     env_directive.setParseAction(handle_env_directive)
 
@@ -204,19 +178,13 @@ def chordpro2html(song):
     # pyparsing grammar definition: chordlines
 
     white_spaces = pp.Word(" \t")
-    empty_line = (
-        pp.LineStart() + pp.Optional(white_spaces) + pp.LineEnd()
-    )  # incl. whiteSpaces
+    empty_line = pp.LineStart() + pp.Optional(white_spaces) + pp.LineEnd()  # incl. whiteSpaces
     empty_line.setParseAction(handle_empty_line)
 
     line_start = pp.LineStart()
-    line_end = pp.Suppress(
-        pp.LineEnd()
-    )  ####### needs Unix type line-endings (at the moment...)
+    line_end = pp.Suppress(pp.LineEnd())  ####### needs Unix type line-endings (at the moment...)
 
-    chord = pp.Combine(
-        "[" + pp.Word(chord_char_set) + "]"
-    )  # leave square brackets there....
+    chord = pp.Combine("[" + pp.Word(chord_char_set) + "]")  # leave square brackets there....
     text = pp.Word(lyric_char_set, excludeChars="[]{}")
     text.setParseAction(handle_text)
 
@@ -241,71 +209,3 @@ def chordpro2html(song):
 
     # logging.info(output)
     return output, title, artist
-
-
-remove_punctuation_map = dict((ord(char), None) for char in r'\/*?:"<>|')
-
-### Starting script per say
-
-book = epub.EpubBook()
-
-# Add metadata
-book.set_identifier(args.book_id)
-book.set_title(args.book_title)
-
-if args.book_author is not None:
-    book.add_author(args.book_author)
-
-# Read the list
-assert os.path.exists(args.list), "Nonexistent list file"
-with open(args.list) as input_file:
-    file_list = input_file.readlines()
-
-# Parse chordpro files and fill the epub structure
-for f in file_list:
-    file_name = f.strip()
-    if not os.path.exists(file_name):
-        print(f"Could not open {file_name}, skipping")
-        continue
-
-    with codecs.open(file_name, "r", "utf-8") as file:
-        body, title, artist = chordpro2html(file.read())
-
-    song_title = f"{title} ({artist})"
-    song_filename = f"{title}_{artist}.xhtml".translate(remove_punctuation_map)
-    chapter = epub.EpubHtml(
-        title=song_title,
-        file_name=song_filename,
-        lang="en",
-    )
-    chapter.add_link(href="style.css", rel="stylesheet", type="text/css")
-    chapter.content = song_skeleton.format(title, artist, body)
-    book.add_item(chapter)
-
-# Setup TOC
-chapter_list = list(book.get_items())
-book.toc = tuple(chapter_list)
-
-# Add style with default if none is specified
-if (args.css is not None) and (os.path.exists(args.css)):
-    with open(args.css) as css_file:
-        style_css = epub.EpubItem(
-            uid="style",
-            file_name="style.css",
-            media_type="text/css",
-            content=css_file.read(),
-        )
-else:
-    style_css = epub.EpubItem(
-        uid="style", file_name="style.css", media_type="text/css", content=""
-    )
-book.add_item(style_css)
-
-# add navigation files
-book.add_item(epub.EpubNcx())
-book.add_item(epub.EpubNav())
-
-# create spine
-book.spine = ["nav"] + chapter_list
-
-epub.write_epub(args.output, book)
