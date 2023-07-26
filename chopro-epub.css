@@ -1,0 +1,51 @@
+* {
+	padding: 0;
+  	margin: 0;
+}
+
+.chordbox {
+    display: inline-block;
+}
+
+.chord {
+    font-weight: bold;
+    font-size: 0.7em;
+    padding: 0 0.3em 0 0;
+    color: blue;
+}
+
+.comment {
+    font-style: italic;
+    font-weight: normal;
+    font-size: 0.7em;
+}
+
+.commentbox {
+    border: 1px solid;
+    padding: 0.1em;
+}
+
+.chorus {
+    padding-left: 1em;
+    border-left: solid 2px;
+}
+
+.tab {
+	font-family: monospace;
+    font-weight: normal;
+    font-style: normal;
+    font-size: 0.5em;
+}
+
+.bridge {
+    font-style: italic;
+    font-weight: normal;
+}
+
+.title, .artist {
+    display: none;
+}
+
+.songline, .text, .verse {
+    /* Purposedly left empty */
+}
