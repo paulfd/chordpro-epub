@@ -7,13 +7,14 @@
 [A] [D] [A] [D]
 [E-] [A] [A7] [D]
 
-{comment:Verse inkl. several     spaces,	tabs and other fancy stuff:
+{comment:Comment incl. several     spaces,	tabs and other fancy stuff:
 - (äöüßÄÖÜ) german umlauts
 - included newlines...}
 
 Leading t[A]ext (äöüßÄÖÜ) [B]and trailing chords [X][Y][Z]
 [A][B] Leading ch[C]ords [D] and trailing text
 Single textline w/o any chords
+This is a very very long text line with no chords, that is intended to break at some point. At least that is the goal, we'll see if it really happens as planned.
 
 {c:Chorus:}{soc}
 Leading t[A]ext (äöüßÄÖÜ) [B]and trailing chords [X][Y][Z ringing...]

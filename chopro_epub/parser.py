@@ -47,6 +47,9 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
 
     # pyparsing parse-action handler
 
+    def div(cls, content):
+        return f'<div class="{cls}">{content}</div>'
+
     def handle_empty_line(t):  # switch-bak songState
         nonlocal song_state
         if song_state == SongState.VERSE:  # reset from default state
@@ -66,36 +69,34 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
             line += '<div class="verse">'
 
         line += '<div class="songline">'
+
         for item in t:
-            line += '<div class="chordbox">'
+            if not all(key in ["text", "chord"] for key in item.keys()):
+                logging.info(f"Unexpected keys in item: {list(item.keys())}")
+                continue
 
-            # chord+text box ---------------------------------------
-            if len(item) == 2:
-                if wrap_chords:
-                    line += '<div class="chord">' + item.chord + "</div>"
+            if "chord" in item:
+                chord = item.chord if wrap_chords else item.chord[1:-1]
+                chord_div = div("chord", chord)
+
+            text = ""
+            if line_has_text:
+                if "text" not in item:
+                    text = "&nbsp;"
                 else:
-                    line += '<div class="chord">' + item.chord[1:-1] + "</div>"
-                if line_has_text:
-                    line += '<div class="text">' + item.text.replace(" ", "&nbsp;") + "</div>"
+                    text = item.text
+                    if text[-1].isspace():
+                        text = text[:-1] + "&nbsp;"
+                text_div = div("text", text)
 
-            # single chord box ---------------------------------------
-            elif len(item) == 1 and len(item.chord) > 0:
-                if wrap_chords:
-                    line += '<div class="chord">' + item.chord + "</div>"
+            if "chord" in item:
+                if text:
+                    line += div("chordbox", chord_div + text_div)
                 else:
-                    line += '<div class="chord">' + item.chord[1:-1] + "</div>"
-                if line_has_text:
-                    line += '<div class="text">&nbsp;</div>'
-
-            # single text box ---------------------------------------
-            elif len(item) == 1 and len(item.text) > 0:
-                line += '<div class="text">' + item.text.replace(" ", "&nbsp;") + "</div>"
-
-            # unhandled...
+                    line += div("chordbox", chord_div)
             else:
-                logging.info(item.dump())
+                line += div("chordbox", text_div)
 
-            line += "</div>"  # ...chordbox
         line += "</div>"  # ...songLine
         return line
 
@@ -125,31 +126,27 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
     def handle_form_directive(t):  # only comments so far....
         token = t[0].strip().lower()
         arg = t[1].strip()
-        str_return = ""
         if token in ["comment", "c"]:
             arg = arg.replace("\n", "<br>")
-            str_return += '<div class="comment">' + arg + "</div>"
+            return div("comment", arg)
         elif token in ["comment_box", "cb"]:
             arg = arg.replace("\n", "<br>")
-            str_return += '<div class="commentbox">' + arg + "</div>"
+            return div("commentbox", arg)
         else:  # unhandled...
-            logging.info(t.dump())
-        return str_return
+            logging.info(f"Unhandled form directive: {t.dump()}")
 
     def handle_meta_directive(t):
         nonlocal title, artist
         token = t[0].strip().lower()
         arg = t[1].strip()
-        str_return = ""
         if token in ["title", "t"]:
             title = arg
-            str_return += '<div class="title">' + arg + "</div>"
+            return div("title", arg)
         elif token in ["artist", "a"]:
             artist = arg
-            str_return += '<div class="artist">' + arg + "</div>"
+            return div("artist", arg)
         else:  # unhandled...
-            logging.info(t.dump())
-        return str_return
+            logging.info(f"Unhandled meta directive: {t.dump()}")
 
     # pyparsing grammar definition: directives
     pp.ParserElement.setDefaultWhitespaceChars("")
@@ -189,13 +186,11 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
     text.setParseAction(handle_text)
 
     chord_box = pp.Group(
-        (chord("chord") + white_spaces("text"))
-        | (  # whiteSpaces after chord seperates the chord from further text \
-            chord("chord") + text("text")
-        )
-        | chord("chord")  # standard chordbox with chord AND text \
-        | text("text")  # single chord w/o text \
-    )  # single text w/o chord
+        (chord("chord") + white_spaces("text"))  # Lone chord with white space afterwards
+        | (chord("chord") + text("text"))  # standard chordbox with chord AND text
+        | chord("chord")  # single chord w/o text
+        | text("text")  # single text w/o chord
+    )
 
     song_line = line_start + pp.OneOrMore(chord_box) + line_end
     song_line.setParseAction(handle_song_line)
