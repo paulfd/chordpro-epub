@@ -30,7 +30,7 @@ from typing import Optional
 import typer
 from ebooklib import epub
 
-from chopro_epub.utils import chordpro2html
+from chopro_epub.parser import chordpro2html
 
 if sys.version_info < (3, 9):
     # importlib.resources either doesn't exist or lacks the files()
