@@ -7,9 +7,8 @@ Simple script to create a songbook from a list of chordpro files.
 
 Download the latest wheel from the build artifacts, or install with pip
 ```
-$ pip install git+https://github.com/paulfd/chordpro-epub.git
+$ pip install chopro-epub
 ```
-PyPI availability might come later.
 
 ## Usage
 
