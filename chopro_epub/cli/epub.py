@@ -24,8 +24,10 @@
 import codecs
 import logging
 import sys
+import re
 from pathlib import Path
 from typing import Optional
+from unidecode import unidecode
 
 import typer
 from ebooklib import epub
@@ -40,6 +42,11 @@ else:
     # importlib.resources has files(), so use that:
     import importlib.resources as importlib_resources
 
+def fix_filename(name: str) -> str:
+    name = unidecode(name)
+    name = re.sub(r'\s+', '_', name)
+    name = re.sub(r'[^a-zA-Z0-9_.-]+', '', name)
+    return name
 
 @typer.run
 def main(
@@ -66,7 +73,6 @@ def main(
     """Generate an EPUB songbook from a list of songs."""
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
     song_skeleton = """<h3>{0} ({1})</h3>{2}"""
-    remove_punctuation_map = dict((ord(char), None) for char in r'\/*?:"<>|')
 
     ### Starting script per say
     book = epub.EpubBook()
@@ -96,7 +102,7 @@ def main(
             body, title, artist = chordpro2html(file.read(), wrap_chords=wrap_chords)
 
         song_title = f"{title} ({artist})"
-        song_filename = f"{title}_{artist}.xhtml".translate(remove_punctuation_map)
+        song_filename = fix_filename(f"{title}_{artist}.xhtml")
         chapter = epub.EpubHtml(
             title=song_title,
             file_name=song_filename,

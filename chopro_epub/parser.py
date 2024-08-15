@@ -153,7 +153,7 @@ def chordpro2html(song: str, wrap_chords: bool = True) -> str:
 
     # lyricCharSet = pp.alphanums+pp.alphas8bit+",-_:;.!?#+*^°§$%&/|()='`´\\\"\t "
     # everything but "{}[]"
-    lyric_char_set = pp.pyparsing_unicode.Latin1.printables + "\t "
+    lyric_char_set = pp.pyparsing_unicode.BasicMultilingualPlane.printables + "\t "
     chord_char_set = pp.alphanums + " -#(%)/='`´."
 
     cmd = pp.oneOf("title t artist a")
